@@ -93,8 +93,8 @@
 /* USER CODE BEGIN PRIVATE_DEFINES */
 /* Define size for the receive and transmit buffer over CDC */
 /* It's up to user to redefine and/or remove those define */
-#define APP_RX_DATA_SIZE  512
-#define APP_TX_DATA_SIZE  512
+#define APP_RX_DATA_SIZE  64
+#define APP_TX_DATA_SIZE  64
 /* USER CODE END PRIVATE_DEFINES */
 
 /**
@@ -126,7 +126,10 @@ uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
 /** Data to send over USB CDC are stored in this buffer   */
 uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
-uint8_t PacketReceive = 0;
+PacketInfo_T RecPespInfo;
+uint8_t PacketBuffer[CDC_I2C_MAX_PACKETS][CDC_I2C_PACKET_SZ];
+uint8_t ResponeBuffer[CDC_I2C_MAX_PACKETS][CDC_I2C_PACKET_SZ];
+
 uint32_t XferDelay = 9600;
 /* USER CODE BEGIN PRIVATE_VARIABLES */
 static const char *g_fwVersion = "AUC-20180330";
@@ -185,6 +188,7 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 static int8_t CDC_Init_FS(void)
 {
   /* USER CODE BEGIN 3 */
+  memset(&RecPespInfo, 0, sizeof(PacketInfo_T));
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
@@ -293,9 +297,18 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
+  if (RecPespInfo.ReceivePacketsCount < CDC_I2C_MAX_PACKETS)
+  {
+    RecPespInfo.ReceivePacketsCount++;
+  	memcpy(PacketBuffer[RecPespInfo.ReceivePacketPosition], UserRxBufferFS, CDC_I2C_PACKET_SZ);
+	RecPespInfo.ReceivePacketPosition++;
+	if (RecPespInfo.ReceivePacketPosition == CDC_I2C_MAX_PACKETS)
+	{
+		RecPespInfo.ReceivePacketPosition = 0;
+	}
+  }
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-  PacketReceive = 1;
   return (USBD_OK);
   /* USER CODE END 6 */
 }
@@ -319,6 +332,7 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
   if (hcdc->TxState != 0){
     return USBD_BUSY;
   }
+  
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
   result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
   /* USER CODE END 7 */
@@ -335,37 +349,47 @@ static void CDC_Delay(uint32_t Delay)
 }
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
-void CDC_I2C_Process(I2C_HandleTypeDef * pI2C)
+void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 {
-  if (PacketReceive)
+  if (RecPespInfo.ReceivePacketsCount)
   {
-  	CDC_I2C_OUT_REPORT_T * pCDCI2COutput = (CDC_I2C_OUT_REPORT_T *)UserRxBufferFS;
-	CDC_I2C_IN_REPORT_T * pCDCI2CInput = (CDC_I2C_IN_REPORT_T *)UserTxBufferFS;
-	CDC_I2C_PORTCONFIG_T * pConfig;
+  	CDC_I2C_OUT_REPORT_T * pCDCI2COutput = (CDC_I2C_OUT_REPORT_T *)PacketBuffer[RecPespInfo.ProcessReceivePositon];
+	CDC_I2C_IN_REPORT_T * pCDCI2CInput = (CDC_I2C_IN_REPORT_T *)ResponeBuffer[RecPespInfo.ResponePacketPosition];
 	
-	PacketReceive = 0;
+	RecPespInfo.ReceivePacketsCount--;
+	RecPespInfo.ProcessReceivePositon++;
+	if (RecPespInfo.ProcessReceivePositon == CDC_I2C_MAX_PACKETS)
+	{
+		RecPespInfo.ProcessReceivePositon = 0;
+	}
 	memcpy(pCDCI2CInput, pCDCI2COutput, CDC_I2C_HEADER_SZ - 1);
 	pCDCI2CInput->resp = CDC_I2C_RES_INVALID_CMD;
 	switch (pCDCI2COutput->req)
 	{
 		case CDC_I2C_REQ_RESET:
-			HAL_I2C_Master_Transmit(pI2C, 0xFF, NULL, 0, 1000);
+			HAL_I2C_Master_Transmit(pI2C, 0xFF, NULL, 0, 10);
 			pCDCI2CInput->resp = CDC_I2C_RES_OK;
 			break;
 			
 		case CDC_I2C_REQ_DEINIT_PORT:
 			HAL_I2C_DeInit(pI2C);
+                        HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
 			pCDCI2CInput->resp = CDC_I2C_RES_OK;
+                        HAL_IWDG_Start(pIWDG);
 			break;
 			
 		case CDC_I2C_REQ_INIT_PORT:
-			HAL_I2C_Init(pI2C);
-			pConfig = (CDC_I2C_PORTCONFIG_T *) &pCDCI2COutput->data[0];
-			XferDelay = pConfig->xferDelay;
-			pCDCI2CInput->resp = CDC_I2C_RES_OK;
-			memcpy((uint8_t *)pCDCI2CInput->data, g_fwVersion, strlen(g_fwVersion));
-			pCDCI2CInput->length = CDC_I2C_HEADER_SZ + strlen(g_fwVersion);
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
+			{
+				CDC_I2C_PORTCONFIG_T * pConfig;
+				HAL_I2C_Init(pI2C);
+				pConfig = (CDC_I2C_PORTCONFIG_T *) &pCDCI2COutput->data[0];
+				XferDelay = pConfig->xferDelay;
+				pCDCI2CInput->resp = CDC_I2C_RES_OK;
+				memcpy((uint8_t *)pCDCI2CInput->data, g_fwVersion, strlen(g_fwVersion));
+				pCDCI2CInput->length = CDC_I2C_HEADER_SZ + strlen(g_fwVersion);
+				HAL_IWDG_Start(pIWDG);
+			}
 			break;
 			
 		case CDC_I2C_REQ_DEVICE_WRITE:
@@ -383,6 +407,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 				}
+				HAL_IWDG_Refresh(pIWDG);
 			}
 			break;
 			
@@ -403,6 +428,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C)
 					pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 					
 				}
+				HAL_IWDG_Refresh(pIWDG);
 			}
 			break;
 			
@@ -436,11 +462,14 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 				}
+				HAL_IWDG_Refresh(pIWDG);
 			}
 			break;
 			
 		case CDC_I2C_REQ_DEVICE_INFO:
 			memset(&pCDCI2CInput->data[0], 0 ,7);
+			pCDCI2CInput->data[0] = 0x88;
+			pCDCI2CInput->data[1] = 0x01;
 			pCDCI2CInput->length += 7;
 			pCDCI2CInput->resp = CDC_I2C_RES_OK;
 			break;
@@ -448,7 +477,28 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C)
 		default:
 			break;
 	}
-	CDC_Transmit_FS(UserTxBufferFS, pCDCI2CInput->length);
+	RecPespInfo.ResponePacketPosition++;
+	if (RecPespInfo.ResponePacketPosition == CDC_I2C_MAX_PACKETS)
+	{
+		RecPespInfo.ResponePacketPosition = 0;
+	}
+  }
+
+  if (RecPespInfo.ProcessReceivePositon != RecPespInfo.ProcessResponePositon)
+  {
+    CDC_I2C_OUT_REPORT_T * pCDCI2CInput = (CDC_I2C_OUT_REPORT_T *)ResponeBuffer[RecPespInfo.ProcessResponePositon];
+    uint8_t result;
+	
+	memcpy(UserTxBufferFS, ResponeBuffer[RecPespInfo.ProcessResponePositon], pCDCI2CInput->length);
+    result = CDC_Transmit_FS(UserTxBufferFS, pCDCI2CInput->length);
+	if (result == USBD_OK)
+	{
+		RecPespInfo.ProcessResponePositon++;
+		if (RecPespInfo.ProcessResponePositon == CDC_I2C_MAX_PACKETS)
+		{
+			RecPespInfo.ProcessResponePositon = 0;
+		}
+	}
   }
 }
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */

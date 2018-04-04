@@ -120,7 +120,7 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C1_Init();
-  //MX_IWDG_Init();
+  MX_IWDG_Init();
   MX_USB_DEVICE_Init();
   MX_ADC_Init();
   MX_USART1_UART_Init();
@@ -134,7 +134,7 @@ int main(void)
   {
 
   /* USER CODE END WHILE */
-    CDC_I2C_Process(&hi2c1);
+    CDC_I2C_Process(&hi2c1, &hiwdg);
   /* USER CODE BEGIN 3 */
 
   }
@@ -286,7 +286,7 @@ static void MX_IWDG_Init(void)
 {
 
   hiwdg.Instance = IWDG;
-  hiwdg.Init.Prescaler = IWDG_PRESCALER_256;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_16;
   hiwdg.Init.Window = 4095;
   hiwdg.Init.Reload = 4095;
   if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
@@ -345,8 +345,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct;
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_RESET);
 }
 
 /* USER CODE BEGIN 4 */

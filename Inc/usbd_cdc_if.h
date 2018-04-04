@@ -220,6 +220,13 @@ typedef struct __CDCI2C_RW_PARAMS {
 
 } CDC_I2C_RW_PARAMS_T;
 
+typedef struct __PacketInfo {
+	uint8_t ReceivePacketsCount;
+	uint8_t ReceivePacketPosition;	
+	uint8_t ProcessReceivePositon;	
+	uint8_t ResponePacketPosition;	
+	uint8_t ProcessResponePositon;	
+} PacketInfo_T;
 /* USER CODE END EXPORTED_TYPES */
 
 /**
@@ -264,7 +271,7 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
 
-void CDC_I2C_Process(I2C_HandleTypeDef * pI2C);
+void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG);
 
 /* USER CODE END EXPORTED_FUNCTIONS */
 
