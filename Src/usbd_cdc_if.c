@@ -121,10 +121,10 @@
 /* Create buffer for reception and transmission           */
 /* It's up to user to redefine and/or remove those define */
 /** Received data over USB are stored in this buffer      */
-uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
+//uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
 
 /** Data to send over USB CDC are stored in this buffer   */
-uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
+//uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 PacketInfo_T RecPespInfo;
 uint8_t PacketBuffer[CDC_I2C_MAX_PACKETS][CDC_I2C_PACKET_SZ];
@@ -132,7 +132,7 @@ uint8_t ResponeBuffer[CDC_I2C_MAX_PACKETS][CDC_I2C_PACKET_SZ];
 
 uint32_t XferDelay = 9600;
 /* USER CODE BEGIN PRIVATE_VARIABLES */
-static const char *g_fwVersion = "AUC-20180330";
+static const char *g_fwVersion = "AUC-20180405";
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -190,8 +190,8 @@ static int8_t CDC_Init_FS(void)
   /* USER CODE BEGIN 3 */
   memset(&RecPespInfo, 0, sizeof(PacketInfo_T));
   /* Set Application Buffers */
-  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, ResponeBuffer[0], 0);
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, PacketBuffer[0]);
   return (USBD_OK);
   /* USER CODE END 3 */
 }
@@ -300,14 +300,13 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   if (RecPespInfo.ReceivePacketsCount < CDC_I2C_MAX_PACKETS)
   {
     RecPespInfo.ReceivePacketsCount++;
-  	memcpy(PacketBuffer[RecPespInfo.ReceivePacketPosition], UserRxBufferFS, CDC_I2C_PACKET_SZ);
 	RecPespInfo.ReceivePacketPosition++;
 	if (RecPespInfo.ReceivePacketPosition == CDC_I2C_MAX_PACKETS)
 	{
 		RecPespInfo.ReceivePacketPosition = 0;
 	}
   }
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, PacketBuffer[RecPespInfo.ReceivePacketPosition]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   return (USBD_OK);
   /* USER CODE END 6 */
@@ -373,10 +372,9 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 			
 		case CDC_I2C_REQ_DEINIT_PORT:
 			HAL_I2C_DeInit(pI2C);
-                        HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
 			pCDCI2CInput->resp = CDC_I2C_RES_OK;
-                        HAL_IWDG_Start(pIWDG);
 			break;
 			
 		case CDC_I2C_REQ_INIT_PORT:
@@ -449,7 +447,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 						if (Ret == HAL_OK)
 						{
 							pCDCI2CInput->resp = CDC_I2C_RES_OK;
-							pCDCI2CInput->length += pXfrParam->rxLength;
+							pCDCI2CInput->length += pXfrParam->rxLength;							
 							HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0);
 						}
 						else
@@ -489,8 +487,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
     CDC_I2C_OUT_REPORT_T * pCDCI2CInput = (CDC_I2C_OUT_REPORT_T *)ResponeBuffer[RecPespInfo.ProcessResponePositon];
     uint8_t result;
 	
-	memcpy(UserTxBufferFS, ResponeBuffer[RecPespInfo.ProcessResponePositon], pCDCI2CInput->length);
-    result = CDC_Transmit_FS(UserTxBufferFS, pCDCI2CInput->length);
+    result = CDC_Transmit_FS(ResponeBuffer[RecPespInfo.ProcessResponePositon], pCDCI2CInput->length);
 	if (result == USBD_OK)
 	{
 		RecPespInfo.ProcessResponePositon++;
