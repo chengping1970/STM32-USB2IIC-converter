@@ -347,6 +347,9 @@ static void CDC_Delay(uint32_t Delay)
 }
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
+#define I2C_TIMEOUT_COUNT 20
+#define READ_RETRY_DELAY  5
+#define READ_RERY_COUNT   6
 void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 {
   if (RecPespInfo.ReceivePacketsCount)
@@ -372,7 +375,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 		case CDC_I2C_REQ_DEINIT_PORT:
 			HAL_I2C_DeInit(pI2C);
             HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_RESET);
 			pCDCI2CInput->resp = CDC_I2C_RES_OK;
 			break;
 			
@@ -404,7 +407,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				HAL_StatusTypeDef Ret;
 
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
-				Ret = HAL_I2C_Master_Transmit(pI2C, pWriteParam->slaveAddr<<1, &pWriteParam->data[0], pWriteParam->length, 20);
+				Ret = HAL_I2C_Master_Transmit(pI2C, pWriteParam->slaveAddr<<1, &pWriteParam->data[0], pWriteParam->length, I2C_TIMEOUT_COUNT);
 				if (Ret == HAL_OK)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_OK;
@@ -421,9 +424,9 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 			{
 				CDC_I2C_RW_PARAMS_T * pReadParam = (CDC_I2C_RW_PARAMS_T *) &pCDCI2COutput->data[0];
 				HAL_StatusTypeDef Ret;
-
+				
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
-				Ret = HAL_I2C_Master_Receive(pI2C, pReadParam->slaveAddr<<1, &pCDCI2CInput->data[0], pReadParam->length, 20);
+				Ret = HAL_I2C_Master_Receive(pI2C, pReadParam->slaveAddr<<1, &pCDCI2CInput->data[0], pReadParam->length, I2C_TIMEOUT_COUNT);
 				if (Ret == HAL_OK)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_OK;
@@ -444,22 +447,27 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				HAL_StatusTypeDef Ret;
 				
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
-				Ret = HAL_I2C_Master_Transmit(pI2C, pXfrParam->slaveAddr<<1, &pXfrParam->data[0], pXfrParam->txLength, 20);
+				Ret = HAL_I2C_Master_Transmit(pI2C, pXfrParam->slaveAddr<<1, &pXfrParam->data[0], pXfrParam->txLength, I2C_TIMEOUT_COUNT);
 				if (Ret == HAL_OK)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_OK;
 					if (pXfrParam->rxLength != 0)
 					{
-						CDC_Delay(XferDelay);
-						Ret = HAL_I2C_Master_Receive(pI2C, pXfrParam->slaveAddr<<1, &pCDCI2CInput->data[0], pXfrParam->rxLength, 20);
-						if (Ret == HAL_OK)
+						CDC_Delay(XferDelay);	
+						pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 						{
-							pCDCI2CInput->resp = CDC_I2C_RES_OK;
-							pCDCI2CInput->length += pXfrParam->rxLength;							
-						}
-						else
-						{
-							pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
+							uint8_t Retry = READ_RERY_COUNT;
+							while (Retry--)
+							{
+								Ret = HAL_I2C_Master_Receive(pI2C, pXfrParam->slaveAddr<<1, &pCDCI2CInput->data[0], pXfrParam->rxLength, I2C_TIMEOUT_COUNT);
+								if (Ret == HAL_OK)
+								{
+									pCDCI2CInput->resp = CDC_I2C_RES_OK;
+									pCDCI2CInput->length += pXfrParam->rxLength;	
+									break;
+								}
+								HAL_Delay(READ_RETRY_DELAY);
+							}
 						}
 					}
 				}
@@ -467,7 +475,14 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 				}
-				HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0);
+				if (pCDCI2CInput->resp == CDC_I2C_RES_OK)
+				{
+					HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_1);
+				}
+				else
+				{
+					HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0);
+				}
 				HAL_IWDG_Refresh(pIWDG);
 			}
 			break;
