@@ -348,8 +348,8 @@ static void CDC_Delay(uint32_t Delay)
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
 #define I2C_TIMEOUT_COUNT 20
-#define READ_RETRY_DELAY  5
-#define READ_RERY_COUNT   6
+#define I2C_RETRY_DELAY  4800
+#define I2C_RERY_COUNT   20
 void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 {
   if (RecPespInfo.ReceivePacketsCount)
@@ -370,6 +370,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 		case CDC_I2C_REQ_RESET:
 			HAL_I2C_Master_Transmit(pI2C, 0xFF, NULL, 0, 10);
 			pCDCI2CInput->resp = CDC_I2C_RES_OK;
+			HAL_IWDG_Refresh(pIWDG);
 			break;
 			
 		case CDC_I2C_REQ_DEINIT_PORT:
@@ -381,10 +382,11 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 			
 		case CDC_I2C_REQ_INIT_PORT:
 			{
-				CDC_I2C_PORTCONFIG_T * pConfig;
+				// *** I2C Read no respone, I retry, no need long delay
+				//CDC_I2C_PORTCONFIG_T * pConfig;
 				HAL_I2C_Init(pI2C);
-				pConfig = (CDC_I2C_PORTCONFIG_T *) &pCDCI2COutput->data[0];
-				XferDelay = pConfig->xferDelay;
+				//pConfig = (CDC_I2C_PORTCONFIG_T *) &pCDCI2COutput->data[0];
+				//XferDelay = pConfig->xferDelay;
 				pCDCI2CInput->resp = CDC_I2C_RES_OK;
 				memcpy((uint8_t *)pCDCI2CInput->data, g_fwVersion, strlen(g_fwVersion));
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ + strlen(g_fwVersion);
@@ -409,7 +411,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
 				pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 				{
-					uint8_t Retry = READ_RERY_COUNT;
+					uint8_t Retry = I2C_RERY_COUNT;
 					while (Retry--)
 					{
 						Ret = HAL_I2C_Master_Transmit(pI2C, pWriteParam->slaveAddr<<1, &pWriteParam->data[0], pWriteParam->length, I2C_TIMEOUT_COUNT);
@@ -418,7 +420,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 							pCDCI2CInput->resp = CDC_I2C_RES_OK;
 							break;
 						}
-						HAL_Delay(READ_RETRY_DELAY);
+						HAL_Delay(I2C_RETRY_DELAY);
 					}
 				}
 				HAL_IWDG_Refresh(pIWDG);
@@ -433,7 +435,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
 				pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 				{
-					uint8_t Retry = READ_RERY_COUNT;
+					uint8_t Retry = I2C_RERY_COUNT;
 					while (Retry--)
 					{
 						Ret = HAL_I2C_Master_Receive(pI2C, pReadParam->slaveAddr<<1, &pReadParam->data[0], pReadParam->length, I2C_TIMEOUT_COUNT);
@@ -443,7 +445,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 							pCDCI2CInput->length += pReadParam->length;	
 							break;
 						}
-						HAL_Delay(READ_RETRY_DELAY);
+						HAL_Delay(I2C_RETRY_DELAY);
 					}
 				}
 				HAL_IWDG_Refresh(pIWDG);
@@ -458,7 +460,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
 				pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 				{
-					uint8_t Retry = READ_RERY_COUNT;
+					uint8_t Retry = I2C_RERY_COUNT;
 					while (Retry--)
 					{
 						Ret = HAL_I2C_Master_Transmit(pI2C, pXfrParam->slaveAddr<<1, &pXfrParam->data[0], pXfrParam->txLength, I2C_TIMEOUT_COUNT);
@@ -467,7 +469,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 							pCDCI2CInput->resp = CDC_I2C_RES_OK;
 							break;
 						}
-						HAL_Delay(READ_RETRY_DELAY);
+						HAL_Delay(I2C_RETRY_DELAY);
 					}
 				}
 				if (Ret == HAL_OK)
@@ -478,7 +480,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 						CDC_Delay(XferDelay);	
 						pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 						{
-							uint8_t Retry = READ_RERY_COUNT;
+							uint8_t Retry = I2C_RERY_COUNT;
 							while (Retry--)
 							{
 								Ret = HAL_I2C_Master_Receive(pI2C, pXfrParam->slaveAddr<<1, &pCDCI2CInput->data[0], pXfrParam->rxLength, I2C_TIMEOUT_COUNT);
@@ -488,7 +490,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 									pCDCI2CInput->length += pXfrParam->rxLength;	
 									break;
 								}
-								HAL_Delay(READ_RETRY_DELAY);
+								CDC_Delay(I2C_RETRY_DELAY);
 							}
 						}
 					}

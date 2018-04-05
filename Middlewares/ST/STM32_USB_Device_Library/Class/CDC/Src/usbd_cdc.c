@@ -246,7 +246,7 @@ configuration */
   0x03,                           /* bmAttributes: Interrupt */
   LOBYTE(CDC_CMD_PACKET_SIZE),     /* wMaxPacketSize: */
   HIBYTE(CDC_CMD_PACKET_SIZE),
-  0x02,  		/* 2ms */          /* bInterval: */ 
+  0x01,  		/* 1ms */          /* bInterval: */
   /*-------------------------------------------------------------------------
 --*/
   
