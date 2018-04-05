@@ -76,7 +76,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_IWDG_Init(void);
+//static void MX_IWDG_Init(void);
 static void MX_ADC_Init(void);
 static void MX_USART1_UART_Init(void);
 
@@ -120,7 +120,7 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C1_Init();
-  MX_IWDG_Init();
+  //MX_IWDG_Init();
   MX_USB_DEVICE_Init();
   MX_ADC_Init();
   MX_USART1_UART_Init();
@@ -282,7 +282,7 @@ static void MX_I2C1_Init(void)
 }
 
 /* IWDG init function */
-static void MX_IWDG_Init(void)
+/*void MX_IWDG_Init(void)
 {
 
   hiwdg.Instance = IWDG;
@@ -293,8 +293,7 @@ static void MX_IWDG_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-
-}
+}*/
 
 /* USART1 init function */
 static void MX_USART1_UART_Init(void)

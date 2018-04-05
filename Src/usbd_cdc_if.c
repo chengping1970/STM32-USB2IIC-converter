@@ -93,8 +93,8 @@
 /* USER CODE BEGIN PRIVATE_DEFINES */
 /* Define size for the receive and transmit buffer over CDC */
 /* It's up to user to redefine and/or remove those define */
-#define APP_RX_DATA_SIZE  64
-#define APP_TX_DATA_SIZE  64
+#define APP_RX_DATA_SIZE  512
+#define APP_TX_DATA_SIZE  512
 /* USER CODE END PRIVATE_DEFINES */
 
 /**
@@ -340,10 +340,9 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
 
 static void CDC_Delay(uint32_t Delay)
 {
-	while (Delay)
+	while (Delay--)
 	{
 		__NOP();
-		Delay--;
 	}
 }
 
@@ -386,7 +385,16 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				pCDCI2CInput->resp = CDC_I2C_RES_OK;
 				memcpy((uint8_t *)pCDCI2CInput->data, g_fwVersion, strlen(g_fwVersion));
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ + strlen(g_fwVersion);
-				HAL_IWDG_Start(pIWDG);
+				{
+					pIWDG->Instance = IWDG;
+					pIWDG->Init.Prescaler = IWDG_PRESCALER_32;
+					pIWDG->Init.Window = 4095;
+					pIWDG->Init.Reload = 4095;
+					if (HAL_IWDG_Init(pIWDG) != HAL_OK)
+					{
+						_Error_Handler(__FILE__, __LINE__);
+					}
+				}
 			}
 			break;
 			
@@ -396,7 +404,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				HAL_StatusTypeDef Ret;
 
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
-				Ret = HAL_I2C_Master_Transmit(pI2C, pWriteParam->slaveAddr<<1, &pWriteParam->data[0], pWriteParam->length, 10);
+				Ret = HAL_I2C_Master_Transmit(pI2C, pWriteParam->slaveAddr<<1, &pWriteParam->data[0], pWriteParam->length, 20);
 				if (Ret == HAL_OK)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_OK;
@@ -415,7 +423,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				HAL_StatusTypeDef Ret;
 
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
-				Ret = HAL_I2C_Master_Receive(pI2C, pReadParam->slaveAddr<<1, &pCDCI2CInput->data[0], pReadParam->length, 10);
+				Ret = HAL_I2C_Master_Receive(pI2C, pReadParam->slaveAddr<<1, &pCDCI2CInput->data[0], pReadParam->length, 20);
 				if (Ret == HAL_OK)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_OK;
@@ -436,19 +444,18 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				HAL_StatusTypeDef Ret;
 				
 				pCDCI2CInput->length = CDC_I2C_HEADER_SZ;
-				Ret = HAL_I2C_Master_Transmit(pI2C, pXfrParam->slaveAddr<<1, &pXfrParam->data[0], pXfrParam->txLength, 10);
+				Ret = HAL_I2C_Master_Transmit(pI2C, pXfrParam->slaveAddr<<1, &pXfrParam->data[0], pXfrParam->txLength, 20);
 				if (Ret == HAL_OK)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_OK;
 					if (pXfrParam->rxLength != 0)
 					{
 						CDC_Delay(XferDelay);
-						Ret = HAL_I2C_Master_Receive(pI2C, pXfrParam->slaveAddr<<1, &pCDCI2CInput->data[0], pXfrParam->rxLength, 10);
+						Ret = HAL_I2C_Master_Receive(pI2C, pXfrParam->slaveAddr<<1, &pCDCI2CInput->data[0], pXfrParam->rxLength, 20);
 						if (Ret == HAL_OK)
 						{
 							pCDCI2CInput->resp = CDC_I2C_RES_OK;
 							pCDCI2CInput->length += pXfrParam->rxLength;							
-							HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0);
 						}
 						else
 						{
@@ -460,6 +467,7 @@ void CDC_I2C_Process(I2C_HandleTypeDef * pI2C, IWDG_HandleTypeDef * pIWDG)
 				{
 					pCDCI2CInput->resp = CDC_I2C_RES_SLAVE_NAK;
 				}
+				HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0);
 				HAL_IWDG_Refresh(pIWDG);
 			}
 			break;
