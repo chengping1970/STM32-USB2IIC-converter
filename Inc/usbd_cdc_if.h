@@ -126,8 +126,9 @@
     The address is either a part of the data or this is a special I2C
     frame that doesn't require an address. For example when transferring a
     frame greater than the USB_CDC packet this option can be used. */
-#define CDC_I2C_TRANSFER_OPTIONS_NO_ADDRESS     0x00000040
+#define CDC_I2C_TRANSFER_OPTIONS_NO_ADDRESS     0x0040
 
+#define CDC_I2C_TRANSFER_OPTIONS_SUB_ADDRESS    0x0080
 /** I2C_FAST_XFER_OPTIONS I2C master faster transfer options
  * @{
  */
@@ -224,7 +225,6 @@ typedef struct __PacketInfo {
 	uint8_t ReceivePacketsCount;
 	uint8_t ReceivePacketPosition;	
 	uint8_t ProcessReceivePositon;	
-	uint8_t ResponePacketPosition;	
 	uint8_t ProcessResponePositon;	
 } PacketInfo_T;
 /* USER CODE END EXPORTED_TYPES */
