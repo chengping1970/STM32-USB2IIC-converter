@@ -76,7 +76,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
-//static void MX_IWDG_Init(void);
+static void MX_IWDG_Init(void);
 static void MX_ADC_Init(void);
 static void MX_USART1_UART_Init(void);
 
@@ -120,10 +120,14 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C1_Init();
-  //MX_IWDG_Init();
+  MX_IWDG_Init();
+  HAL_Delay(1000);
   MX_USB_DEVICE_Init();
   MX_ADC_Init();
   MX_USART1_UART_Init();
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
+  HAL_IWDG_Refresh(&hiwdg);
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -282,18 +286,18 @@ static void MX_I2C1_Init(void)
 }
 
 /* IWDG init function */
-/*static void MX_IWDG_Init(void)
+static void MX_IWDG_Init(void)
 {
 
   hiwdg.Instance = IWDG;
-  hiwdg.Init.Prescaler = IWDG_PRESCALER_32;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
   hiwdg.Init.Window = 4095;
   hiwdg.Init.Reload = 4095;
   if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-}*/
+}
 
 /* USART1 init function */
 static void MX_USART1_UART_Init(void)
@@ -346,7 +350,7 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_0, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
 }
 
